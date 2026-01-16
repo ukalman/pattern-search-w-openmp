@@ -119,6 +119,66 @@ namespace pattern_search
                 }
             }
         }
+
+        inline void findExactMatchesOMP_Method2_BParallel(
+            const Image& img,
+            std::vector<pattern_search::MatchResult>& results)
+        {
+            const int W = img.getWidth();
+            const int H = img.getHeight();
+
+            const int AyCount = H - PATTERN_SIZE + 1;
+            const int AxCount = W - PATTERN_SIZE + 1;
+
+            const int ByCount = H - PATTERN_SIZE + 1;
+            const int BxCount = W - PATTERN_SIZE + 1;
+            const int totalB = ByCount * BxCount;
+
+            for (int ay = 0; ay < AyCount; ++ay)
+            {
+                for (int ax = 0; ax < AxCount; ++ax)
+                {
+                    if (!(ay > ax))
+                        continue;
+
+                    std::vector<pattern_search::MatchResult> localAResults;
+
+                    #pragma omp parallel
+                    {
+                        std::vector<pattern_search::MatchResult> localThreadResults;
+
+                        #pragma omp for schedule(static)
+                        for (int idx = 0; idx < totalB; ++idx)
+                        {
+                            int by = idx / BxCount;
+                            int bx = idx % BxCount;
+
+                            if (!(by < bx))
+                                continue;
+
+                            if (pattern_search::exactMatch(img, ax, ay, bx, by))
+                            {
+                                localThreadResults.push_back({ ax, ay, bx, by });
+                            }
+                        }
+
+                        #pragma omp critical
+                        {
+                            localAResults.insert(
+                                localAResults.end(),
+                                localThreadResults.begin(),
+                                localThreadResults.end());
+                        }
+                    }
+
+                    results.insert(
+                        results.end(),
+                        localAResults.begin(),
+                        localAResults.end());
+                }
+            }
+        }
+
     }
 }
 
